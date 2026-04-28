@@ -1,62 +1,72 @@
-export const _vBh = { runtime: "\x65\x64\x67\x65" };
+export const config = { runtime: "edge" };
 
-const _JPSTSJ = (process.env.TARGET_DOMAIN || "").replace(/\/$/, "");
+// Base URL of the upstream server, without trailing slash.
+const UPSTREAM_BASE_URL = (process.env.TARGET_DOMAIN || "").replace(//$/, "");
 
-const _nGwfywsi = new Set([
-  "\x68\x6f\x73\x74",
-  "\x63\x6f\x6e\x6e\x65\x63\x74\x69\x6f\x6e",
-  "\x6b\x65\x65\x70\x2d\x61\x6c\x69\x76\x65",
-  "\x70\x72\x6f\x78\x79\x2d\x61\x75\x74\x68\x65\x6e\x74\x69\x63\x61\x74\x65",
-  "\x70\x72\x6f\x78\x79\x2d\x61\x75\x74\x68\x6f\x72\x69\x7a\x61\x74\x69\x6f\x6e",
-  "\x74\x65",
-  "\x74\x72\x61\x69\x6c\x65\x72",
-  "\x74\x72\x61\x6e\x73\x66\x65\x72\x2d\x65\x6e\x63\x6f\x64\x69\x6e\x67",
-  "\x75\x70\x67\x72\x61\x64\x65",
-  "\x66\x6f\x72\x77\x61\x72\x64\x65\x64",
-  "\x78\x2d\x66\x6f\x72\x77\x61\x72\x64\x65\x64\x2d\x68\x6f\x73\x74",
-  "\x78\x2d\x66\x6f\x72\x77\x61\x72\x64\x65\x64\x2d\x70\x72\x6f\x74\x6f",
-  "\x78\x2d\x66\x6f\x72\x77\x61\x72\x64\x65\x64\x2d\x70\x6f\x72\x74",
+// Headers that should not be forwarded as-is.
+const HOP_BY_HOP_HEADERS = new Set([
+  "host",
+  "connection",
+  "keep-alive",
+  "proxy-authenticate",
+  "proxy-authorization",
+  "te",
+  "trailer",
+  "transfer-encoding",
+  "upgrade",
+  "forwarded",
+  "x-forwarded-host",
+  "x-forwarded-proto",
+  "x-forwarded-port",
 ]);
 
-export default async function fnmLOoD(req) {
-  if (!TARGET_BASE) {
-    return new Response("\x4d\x69\x73\x63\x6f\x6e\x66\x69\x67\x75\x72\x65\x64\x3a\x20\x54\x41\x52\x47\x45\x54\x5f\x44\x4f\x4d\x41\x49\x4e\x20\x69\x73\x20\x6e\x6f\x74\x20\x73\x65\x74", { status: 500 });
+export default async function edgeRelay(request) {
+  if (!UPSTREAM_BASE_URL) {
+    return new Response("Misconfigured: TARGET_DOMAIN is not set", { status: 500 });
   }
 
   try {
-    const _ThX = req.url.indexOf("\x2f", 8);
-    const _aKgiIVrw =
-      pathStart === -1 ? TARGET_BASE + "\x2f" : TARGET_BASE + req.url.slice(pathStart);
+    const pathStartIndex = request.url.indexOf("/", 8);
+    const upstreamUrl =
+      pathStartIndex === -1
+        ? UPSTREAM_BASE_URL + "/"
+        : UPSTREAM_BASE_URL + request.url.slice(pathStartIndex);
 
-    const _ofWK = new Headers();
-    let _YETxTo = null;
-    for (const [k, v] of req.headers) {
-      if (STRIP_HEADERS.has(k)) continue;
-      if (k.startsWith("\x78\x2d\x76\x65\x72\x63\x65\x6c\x2d")) continue;
-      if (k === "\x78\x2d\x72\x65\x61\x6c\x2d\x69\x70") {
-        clientIp = v;
+    const forwardHeaders = new Headers();
+    let originIp = null;
+
+    for (const [headerName, headerValue] of request.headers) {
+      if (HOP_BY_HOP_HEADERS.has(headerName)) continue;
+      if (headerName.startsWith("x-vercel-")) continue;
+
+      if (headerName === "x-real-ip") {
+        originIp = headerValue;
         continue;
       }
-      if (k === "\x78\x2d\x66\x6f\x72\x77\x61\x72\x64\x65\x64\x2d\x66\x6f\x72") {
-        if (!clientIp) clientIp = v;
+
+      if (headerName === "x-forwarded-for") {
+        if (!originIp) originIp = headerValue;
         continue;
       }
-      out.set(k, v);
+
+      forwardHeaders.set(headerName, headerValue);
     }
-    if (clientIp) out.set("\x78\x2d\x66\x6f\x72\x77\x61\x72\x64\x65\x64\x2d\x66\x6f\x72", clientIp);
 
-    const _QmDpeG = req.method;
-    const _sUsek = method !== "\x47\x45\x54" && method !== "\x48\x45\x41\x44";
+    // Preserve a single client IP hint for the upstream.
+    if (originIp) forwardHeaders.set("x-forwarded-for", originIp);
 
-    return await fetch(targetUrl, {
-      method,
-      headers: out,
-      body: hasBody ? req.body : undefined,
-      duplex: "\x68\x61\x6c\x66",
-      redirect: "\x6d\x61\x6e\x75\x61\x6c",
+    const requestMethod = request.method;
+    const shouldSendBody = requestMethod !== "GET" && requestMethod !== "HEAD";
+
+    return await fetch(upstreamUrl, {
+      method: requestMethod,
+      headers: forwardHeaders,
+      body: shouldSendBody ? request.body : undefined,
+      duplex: "half",
+      redirect: "manual",
     });
-  } catch (err) {
-    console.error("\x72\x65\x6c\x61\x79\x20\x65\x72\x72\x6f\x72\x3a", err);
-    return new Response("\x42\x61\x64\x20\x47\x61\x74\x65\x77\x61\x79\x3a\x20\x54\x75\x6e\x6e\x65\x6c\x20\x46\x61\x69\x6c\x65\x64", { status: 502 });
+  } catch (error) {
+    console.error("relay error:", error);
+    return new Response("Bad Gateway: Tunnel Failed", { status: 502 });
   }
 }
