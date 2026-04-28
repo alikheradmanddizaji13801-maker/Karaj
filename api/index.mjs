@@ -1,5 +1,5 @@
-// Edge runtime config for async request handling
-export const config = { runtime: "edge" };
+// Edge runtime declaration — new Vercel syntax
+export const runtime = "edge";
 
 // Base URL of the internal service — read from environment variable
 const _0x3f2a = (process.env.TARGET_DOMAIN || "").replace(//$/, "");
@@ -39,20 +39,10 @@ export default async function _handleRequest(req) {
     let _clientAddr = null;
 
     for (const [_k, _v] of req.headers) {
-      // Drop forbidden headers
       if (_filterMap.has(_k)) continue;
-      // Drop platform-specific headers
       if (_k.startsWith("x-vercel-")) continue;
-      // Extract real client IP
-      if (_k === "x-real-ip") {
-        _clientAddr = _v;
-        continue;
-      }
-      // Handle forwarded-for header
-      if (_k === "x-forwarded-for") {
-        if (!_clientAddr) _clientAddr = _v;
-        continue;
-      }
+      if (_k === "x-real-ip") { _clientAddr = _v; continue; }
+      if (_k === "x-forwarded-for") { if (!_clientAddr) _clientAddr = _v; continue; }
       _cleanHeaders.set(_k, _v);
     }
 
@@ -72,7 +62,6 @@ export default async function _handleRequest(req) {
       redirect: "manual",
     });
   } catch (_err) {
-    // Log error and return bad gateway response
     console.error("relay error:", _err);
     return new Response("Bad Gateway: Tunnel Failed", { status: 502 });
   }
