@@ -7,10 +7,5 @@
       "destination": "/api/index"
     }
   ],
-  "functions": {
-    "api/index.js": {
-      "runtime": "edge"
-    }
-  },
   "trailingSlash": false
 }
